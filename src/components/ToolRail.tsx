@@ -1,5 +1,6 @@
 import {
   Activity,
+  BadgeDollarSign,
   Building2,
   ChevronRight,
   Droplets,
@@ -11,7 +12,6 @@ import {
   House,
   Landmark,
   Map,
-  MousePointer2,
   Recycle,
   Route,
   Settings2,
@@ -19,6 +19,7 @@ import {
   Store,
   Trash2,
   Waves,
+  WalletCards,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -54,11 +55,11 @@ const categories: MenuCategory[] = [
     id: "planning",
     label: "Stadtplanung",
     shortLabel: "Planen",
-    description: "Karte erschliessen und Strassen bauen",
+    description: "Strassennetz und Hauptachsen planen",
     icon: Map,
     tools: [
-      { id: "sectors", label: "Sektoren", icon: Map },
       { id: "roads", label: "Strassen", icon: Route },
+      { id: "avenues", label: "Alleen", icon: Route },
     ],
   },
   {
@@ -71,6 +72,7 @@ const categories: MenuCategory[] = [
       { id: "residential", label: "Wohngebiet", icon: House },
       { id: "commercial", label: "Gewerbegebiet", icon: Store },
       { id: "industrial", label: "Industriegebiet", icon: Factory },
+      { id: "land-value", label: "Grundstueckswerte", icon: BadgeDollarSign },
     ],
   },
   {
@@ -91,13 +93,13 @@ const categories: MenuCategory[] = [
     id: "facilities",
     label: "Oeffentliche Einrichtungen",
     shortLabel: "Dienste",
-    description: "Stadtdienste werden schrittweise freigeschaltet",
+    description: "Sicherheit, Gesundheit und Bildung ausbauen",
     icon: Landmark,
     tools: [
-      { label: "Polizei", icon: Shield, planned: true },
-      { label: "Feuerwehr", icon: Flame, planned: true },
-      { label: "Gesundheit", icon: Hospital, planned: true },
-      { label: "Bildung", icon: GraduationCap, planned: true },
+      { id: "police", label: "Polizei", icon: Shield },
+      { id: "fire", label: "Feuerwehr", icon: Flame },
+      { id: "health", label: "Gesundheit", icon: Hospital },
+      { id: "education", label: "Bildung", icon: GraduationCap },
       { label: "Rathaus", icon: Landmark, planned: true },
     ],
   },
@@ -108,7 +110,7 @@ const categories: MenuCategory[] = [
     description: "Stadt untersuchen oder Gebautes entfernen",
     icon: Settings2,
     tools: [
-      { id: "inspect", label: "Auswaehlen", icon: MousePointer2 },
+      { id: "finances", label: "Finanzen", icon: WalletCards },
       { id: "bulldozer", label: "Bulldozer", icon: Trash2, danger: true },
     ],
   },
@@ -188,8 +190,15 @@ export function ToolRail({ activeTool, onSelectTool }: ToolRailProps) {
 }
 
 function getCategoryForTool(tool: ToolId): MenuCategoryId {
-  if (tool === "sectors" || tool === "roads") return "planning";
-  if (tool === "residential" || tool === "commercial" || tool === "industrial") {
+  if (tool === "roads" || tool === "avenues") {
+    return "planning";
+  }
+  if (
+    tool === "residential" ||
+    tool === "commercial" ||
+    tool === "industrial" ||
+    tool === "land-value"
+  ) {
     return "zones";
   }
   if (
@@ -200,6 +209,14 @@ function getCategoryForTool(tool: ToolId): MenuCategoryId {
     tool === "waste"
   ) {
     return "needs";
+  }
+  if (
+    tool === "fire" ||
+    tool === "police" ||
+    tool === "health" ||
+    tool === "education"
+  ) {
+    return "facilities";
   }
   return "manage";
 }

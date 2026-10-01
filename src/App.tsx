@@ -3,10 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BuildInspector } from "./components/BuildInspector";
 import { BulldozerInspector } from "./components/BulldozerInspector";
+import { CivicServiceInspector } from "./components/CivicServiceInspector";
+import { FinanceInspector } from "./components/FinanceInspector";
+import { LandValueInspector } from "./components/LandValueInspector";
 import { NeedsInspector } from "./components/NeedsInspector";
-import { PurchaseDialog } from "./components/PurchaseDialog";
 import { SaveGameDialog } from "./components/SaveGameDialog";
-import { SectorInspector } from "./components/SectorInspector";
 import { ToolRail } from "./components/ToolRail";
 import { TopBar } from "./components/TopBar";
 import { UtilityInspector } from "./components/UtilityInspector";
@@ -14,37 +15,32 @@ import { useSimulationWorker } from "./hooks/useSimulationWorker";
 import { loadAutosave, saveAutosave } from "./persistence/savegameRepository";
 import { CityMapCanvas } from "./rendering/CityMapCanvas";
 import { useGameStore } from "./store/gameStore";
-import type { BuildToolId, ToolId, UtilityToolId } from "./store/gameStore";
+import type {
+  BuildToolId,
+  CivicToolId,
+  ToolId,
+  UtilityToolId,
+} from "./store/gameStore";
 
 export default function App() {
   const snapshot = useGameStore((store) => store.snapshot);
   const connected = useGameStore((store) => store.connected);
-  const selectedSectorId = useGameStore((store) => store.selectedSectorId);
   const activeTool = useGameStore((store) => store.activeTool);
   const selectedServiceBuildingKind = useGameStore(
     (store) => store.selectedServiceBuildingKind,
   );
   const notice = useGameStore((store) => store.notice);
-  const selectSector = useGameStore((store) => store.selectSector);
   const setActiveTool = useGameStore((store) => store.setActiveTool);
   const selectServiceBuildingKind = useGameStore(
     (store) => store.selectServiceBuildingKind,
   );
   const showNotice = useGameStore((store) => store.showNotice);
   const dismissNotice = useGameStore((store) => store.dismissNotice);
-  const [purchaseSectorId, setPurchaseSectorId] = useState<number | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const latestSnapshotRef = useRef(snapshot);
   const autosaveCheckedRef = useRef(false);
   const simulation = useSimulationWorker();
-
-  const cancelPurchase = useCallback(() => setPurchaseSectorId(null), []);
-  const confirmPurchase = useCallback(() => {
-    if (purchaseSectorId === null) return;
-    simulation.purchaseSector(purchaseSectorId);
-    setPurchaseSectorId(null);
-  }, [purchaseSectorId, simulation]);
 
   useEffect(() => {
     if (!notice) return;
@@ -96,10 +92,9 @@ export default function App() {
   const handleLoadGame = useCallback(
     (state: typeof snapshot) => {
       simulation.loadState(state);
-      selectSector(null);
       setActiveTool("needs");
     },
-    [selectSector, setActiveTool, simulation],
+    [setActiveTool, simulation],
   );
 
   return (
@@ -114,10 +109,8 @@ export default function App() {
       <main className="map-stage">
         <CityMapCanvas
           state={snapshot}
-          selectedSectorId={selectedSectorId}
           activeTool={activeTool}
           selectedServiceBuildingKind={selectedServiceBuildingKind}
-          onSelectSector={selectSector}
           onBuildTiles={simulation.buildTiles}
           onDemolishTiles={simulation.demolishTiles}
           onPlaceServiceBuilding={simulation.placeServiceBuilding}
@@ -125,6 +118,15 @@ export default function App() {
       </main>
       {activeTool === "needs" ? (
         <NeedsInspector state={snapshot} />
+      ) : activeTool === "land-value" ? (
+        <LandValueInspector state={snapshot} />
+      ) : isCivicTool(activeTool) ? (
+        <CivicServiceInspector
+          activeTool={activeTool}
+          state={snapshot}
+          selectedKind={selectedServiceBuildingKind}
+          onSelectKind={selectServiceBuildingKind}
+        />
       ) : isUtilityTool(activeTool) ? (
         <UtilityInspector
           activeTool={activeTool}
@@ -132,17 +134,13 @@ export default function App() {
           selectedKind={selectedServiceBuildingKind}
           onSelectKind={selectServiceBuildingKind}
         />
+      ) : activeTool === "finances" ? (
+        <FinanceInspector state={snapshot} onTakeLoan={simulation.takeLoan} />
       ) : activeTool === "bulldozer" ? (
         <BulldozerInspector state={snapshot} />
       ) : isBuildTool(activeTool) ? (
         <BuildInspector activeTool={activeTool} state={snapshot} />
-      ) : (
-        <SectorInspector
-          state={snapshot}
-          selectedSectorId={selectedSectorId}
-          onRequestPurchase={setPurchaseSectorId}
-        />
-      )}
+      ) : null}
 
       {notice && (
         <div
@@ -164,15 +162,6 @@ export default function App() {
         </div>
       )}
 
-      {purchaseSectorId !== null && (
-        <PurchaseDialog
-          state={snapshot}
-          sectorId={purchaseSectorId}
-          onCancel={cancelPurchase}
-          onConfirm={confirmPurchase}
-        />
-      )}
-
       {saveDialogOpen && (
         <SaveGameDialog
           state={snapshot}
@@ -188,6 +177,7 @@ export default function App() {
 function isBuildTool(tool: ToolId): tool is BuildToolId {
   return (
     tool === "roads" ||
+    tool === "avenues" ||
     tool === "residential" ||
     tool === "commercial" ||
     tool === "industrial"
@@ -197,5 +187,11 @@ function isBuildTool(tool: ToolId): tool is BuildToolId {
 function isUtilityTool(tool: ToolId): tool is UtilityToolId {
   return (
     tool === "electricity" || tool === "water" || tool === "sewage" || tool === "waste"
+  );
+}
+
+function isCivicTool(tool: ToolId): tool is CivicToolId {
+  return (
+    tool === "fire" || tool === "police" || tool === "health" || tool === "education"
   );
 }

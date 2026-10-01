@@ -4,6 +4,8 @@ import {
   countZones,
   getBuildCost,
   getSupplyIssues,
+  getZoneDevelopments,
+  getZoneDevelopmentSummary,
   getZoneDemand,
   type BuildKind,
   type GameState,
@@ -47,17 +49,26 @@ const zoneConfig: Record<
 };
 
 export function BuildInspector({ activeTool, state }: BuildInspectorProps) {
-  const isRoad = activeTool === "roads";
-  const zone = isRoad ? null : activeTool;
+  const isStreet = activeTool === "roads" || activeTool === "avenues";
+  const isAvenue = activeTool === "avenues";
+  const zone = isStreet ? null : activeTool;
   const config = zone ? zoneConfig[zone] : null;
-  const Icon = isRoad ? Route : config!.icon;
-  const title = isRoad ? "Strassenbau" : config!.title;
-  const kind: BuildKind = isRoad ? "road" : zone!;
-  const tileCount = isRoad ? state.roadTiles.length : countZones(state, zone!);
-  const output =
-    zone === "residential"
-      ? tileCount * 6
-      : tileCount * (zone === "commercial" ? 4 : 6);
+  const Icon = isStreet ? Route : config!.icon;
+  const title = isAvenue ? "Alleebau" : isStreet ? "Strassenbau" : config!.title;
+  const kind: BuildKind = isAvenue ? "avenue" : isStreet ? "road" : zone!;
+  const tileCount = isAvenue
+    ? (state.avenueTiles ?? []).length
+    : activeTool === "roads"
+      ? state.roadTiles.length - (state.avenueTiles ?? []).length
+      : countZones(state, zone!);
+  const developments = zone
+    ? getZoneDevelopments(state).filter((development) => development.tile.zone === zone)
+    : [];
+  const developmentSummary = zone ? getZoneDevelopmentSummary(state, zone) : null;
+  const output = developments.reduce(
+    (total, development) => total + development.level * (zone === "commercial" ? 4 : 6),
+    0,
+  );
   const demand = zone ? getZoneDemand(state)[zone] : 0;
   const supplyIssue = getSupplyIssues(state)[0];
   const issueLabels = {
@@ -94,11 +105,11 @@ export function BuildInspector({ activeTool, state }: BuildInspectorProps) {
         <div>
           <dt>
             <Grid3X3 aria-hidden="true" />
-            {isRoad ? "Strassennetz" : config!.areaLabel}
+            {isAvenue ? "Alleennetz" : isStreet ? "Strassennetz" : config!.areaLabel}
           </dt>
           <dd>{tileCount} Kacheln</dd>
         </div>
-        {!isRoad && (
+        {!isStreet && (
           <>
             <div>
               <dt>
@@ -111,14 +122,26 @@ export function BuildInspector({ activeTool, state }: BuildInspectorProps) {
               <dt>{config!.outputLabel}</dt>
               <dd>{output}</dd>
             </div>
+            <div>
+              <dt>Ø Stufe</dt>
+              <dd>
+                {developmentSummary!.averageLevel} / {zone === "industrial" ? 3 : 5}
+              </dd>
+            </div>
+            <div>
+              <dt>Bodenwert</dt>
+              <dd>{developmentSummary!.averageLandValue} / 100</dd>
+            </div>
           </>
         )}
       </dl>
 
       <div className="inspector-result build-status">
         <Icon aria-hidden="true" />
-        {isRoad
-          ? "Baubereich: eigene Sektoren"
+        {isStreet
+          ? isAvenue
+            ? "Zwei Kacheln breit · Gerade Trasse"
+            : "Geradliniger Trassenbau aktiv"
           : supplyIssue
             ? issueLabels[supplyIssue]
             : `Nachfrage: ${demand} %`}

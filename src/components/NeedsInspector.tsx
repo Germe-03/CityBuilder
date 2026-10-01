@@ -2,8 +2,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Droplets,
+  Flame,
+  GraduationCap,
   HeartPulse,
+  Hospital,
   Recycle,
+  Shield,
   Smile,
   TrendingUp,
   Waves,
@@ -11,8 +15,11 @@ import {
 } from "lucide-react";
 
 import {
+  getCivicCoverage,
+  getClassDemand,
   getSupplyIssues,
   getUtilityCapacity,
+  getUtilityCoverage,
   getUtilityDemand,
   getZoneDemand,
   type GameState,
@@ -38,6 +45,12 @@ const utilityRows: Array<{
 export function NeedsInspector({ state }: NeedsInspectorProps) {
   const demand = getZoneDemand(state);
   const issues = getSupplyIssues(state);
+  const civicRows = [
+    { category: "fire" as const, label: "Feuerwehr", icon: Flame },
+    { category: "police" as const, label: "Polizei", icon: Shield },
+    { category: "health" as const, label: "Gesundheit", icon: Hospital },
+    { category: "education" as const, label: "Bildung", icon: GraduationCap },
+  ];
 
   return (
     <aside className="sector-inspector needs-inspector" aria-label="Beduerfnisse">
@@ -66,6 +79,32 @@ export function NeedsInspector({ state }: NeedsInspectorProps) {
         <NeedBar label="Industrie" value={demand.industrial} tone="industrial" />
       </section>
 
+      <section className="needs-section" aria-labelledby="class-demand-heading">
+        <h3 id="class-demand-heading">
+          <TrendingUp aria-hidden="true" />
+          Nachfrage nach Klasse
+        </h3>
+        <div className="class-demand-list">
+          {(
+            [
+              ["residential", "Wohnen"],
+              ["commercial", "Gewerbe"],
+              ["industrial", "Industrie"],
+            ] as const
+          ).map(([zone, label]) => {
+            const classDemand = getClassDemand(state, zone);
+            return (
+              <div className="class-demand-row" key={zone}>
+                <strong>{label}</strong>
+                <span>B {classDemand.basic}</span>
+                <span>M {classDemand.middle}</span>
+                <span>H {classDemand.premium}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="needs-section" aria-labelledby="supply-heading">
         <h3 id="supply-heading">
           <HeartPulse aria-hidden="true" />
@@ -75,7 +114,9 @@ export function NeedsInspector({ state }: NeedsInspectorProps) {
           {utilityRows.map(({ category, label, icon: Icon, unit }) => {
             const capacity = getUtilityCapacity(state, category);
             const utilityDemand = getUtilityDemand(state, category);
-            const supplied = capacity >= utilityDemand;
+            const coverage = getUtilityCoverage(state, category);
+            const supplied =
+              capacity >= utilityDemand && coverage.coveragePercent === 100;
             return (
               <div className="supply-row" key={category}>
                 <Icon aria-hidden="true" />
@@ -83,12 +124,43 @@ export function NeedsInspector({ state }: NeedsInspectorProps) {
                   <strong>{label}</strong>
                   <small>
                     {capacity} / {utilityDemand} {unit}
+                    {category !== "waste" && ` · ${coverage.coveragePercent} % Netz`}
                   </small>
                 </span>
                 {supplied ? (
                   <CheckCircle2 aria-label="Versorgt" className="supply-ok" />
                 ) : (
                   <AlertTriangle aria-label="Engpass" className="supply-warning" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="needs-section" aria-labelledby="civic-supply-heading">
+        <h3 id="civic-supply-heading">
+          <HeartPulse aria-hidden="true" />
+          Oeffentliche Dienste
+        </h3>
+        <div className="supply-list">
+          {civicRows.map(({ category, label, icon: Icon }) => {
+            const coverage = getCivicCoverage(state, category);
+            const supplied = coverage.coveragePercent >= 80;
+            return (
+              <div className="supply-row" key={category}>
+                <Icon aria-hidden="true" />
+                <span>
+                  <strong>{label}</strong>
+                  <small>{coverage.coveragePercent} % Abdeckung</small>
+                </span>
+                {supplied ? (
+                  <CheckCircle2 aria-label="Gut abgedeckt" className="supply-ok" />
+                ) : (
+                  <AlertTriangle
+                    aria-label="Abdeckung fehlt"
+                    className="supply-warning"
+                  />
                 )}
               </div>
             );

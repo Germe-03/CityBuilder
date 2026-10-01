@@ -1,9 +1,9 @@
 # CityBuilder
 
-Browserbasierte 3D-Stadtsimulation mit einer quadratischen Karte aus 64
-freischaltbaren Sektoren und einem Startgebiet in der suedwestlichen Kartenecke.
+Browserbasierte 3D-Stadtsimulation mit einer quadratischen, von Beginn an
+vollstaendig bebaubaren Karte aus 128 x 128 Kacheln.
 
-Der aktuelle Vertikalschnitt umfasst Sektorkauf, direkten 3D-Strassenbau sowie
+Der aktuelle Vertikalschnitt umfasst geradlinigen 3D-Strassenbau sowie
 Wohn-, Gewerbe- und Industriezonen mit automatisch entstehenden Gebaeuden. Die
 Simulation berechnet erste Einwohner-, Arbeitsplatz- und Budgeteffekte. Mit dem
 Bulldozer lassen sich Strassen, Zonen und Einrichtungen direkt wieder entfernen.

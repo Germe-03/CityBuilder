@@ -6,7 +6,7 @@ import {
   createInitialGameState,
   demolishTiles,
   placeServiceBuilding,
-  purchaseSector,
+  takeLoan,
 } from "../simulation/cityMap";
 import type { SimulationCommand, SimulationEvent } from "../simulation/protocol";
 
@@ -28,18 +28,6 @@ workerScope.onmessage = (message: MessageEvent<SimulationCommand>) => {
     case "initialize":
       emitSnapshot();
       break;
-    case "purchase-sector": {
-      const result = purchaseSector(state, command.sectorId);
-      state = result.state;
-      emit({
-        type: "purchase-result",
-        ok: result.ok,
-        sectorId: command.sectorId,
-        reason: result.reason,
-        state,
-      });
-      break;
-    }
     case "build-tiles": {
       const result = buildTiles(state, command.kind, command.tiles);
       state = result.state;
@@ -84,6 +72,19 @@ workerScope.onmessage = (message: MessageEvent<SimulationCommand>) => {
       state = { ...state, speed: command.speed };
       emitSnapshot();
       break;
+    case "take-loan": {
+      const result = takeLoan(state, command.amount, command.term);
+      state = result.state;
+      emit({
+        type: "loan-result",
+        ok: result.ok,
+        amount: command.amount,
+        term: command.term,
+        reason: result.reason,
+        state,
+      });
+      break;
+    }
     case "replace-state":
       state = command.state;
       emitSnapshot();

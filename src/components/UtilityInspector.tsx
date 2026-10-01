@@ -14,6 +14,7 @@ import {
 
 import {
   getUtilityCapacity,
+  getUtilityCoverage,
   getUtilityDemand,
   SERVICE_BUILDING_DEFINITIONS,
   type GameState,
@@ -70,7 +71,7 @@ const utilityConfig = {
   }
 >;
 
-const serviceIcons: Record<ServiceBuildingKind, typeof Zap> = {
+const serviceIcons: Partial<Record<ServiceBuildingKind, typeof Zap>> = {
   "wind-turbine": Wind,
   "power-plant": Factory,
   "water-pump": Droplets,
@@ -91,7 +92,8 @@ export function UtilityInspector({
   const demand = getUtilityDemand(state, activeTool);
   const capacity = getUtilityCapacity(state, activeTool);
   const reserve = capacity - demand;
-  const supplied = reserve >= 0;
+  const coverage = getUtilityCoverage(state, activeTool);
+  const supplied = reserve >= 0 && coverage.coveragePercent === 100;
   const Icon = config.icon;
 
   return (
@@ -140,6 +142,14 @@ export function UtilityInspector({
             {reserve} {config.unit}
           </dd>
         </div>
+        {activeTool !== "waste" && (
+          <div>
+            <dt>Strassennetz</dt>
+            <dd>
+              {coverage.suppliedZoneCount} / {coverage.relevantZoneCount} Gebiete
+            </dd>
+          </div>
+        )}
       </dl>
 
       <div
@@ -149,7 +159,7 @@ export function UtilityInspector({
       >
         {config.options.map((kind) => {
           const definition = SERVICE_BUILDING_DEFINITIONS[kind];
-          const OptionIcon = serviceIcons[kind];
+          const OptionIcon = serviceIcons[kind] ?? Icon;
           const selected = selectedKind === kind;
           return (
             <button
@@ -174,7 +184,9 @@ export function UtilityInspector({
 
       <div className="inspector-result utility-status">
         <CircleDollarSign aria-hidden="true" />
-        Strassenanschluss und freie Flaeche erforderlich
+        {activeTool === "waste"
+          ? "Strassenanschluss und freie Flaeche erforderlich"
+          : "Versorgung folgt automatisch dem verbundenen Strassennetz"}
       </div>
     </aside>
   );

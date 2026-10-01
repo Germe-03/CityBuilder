@@ -19,6 +19,7 @@ import {
 import {
   getElectricityCapacity,
   getElectricityDemand,
+  getSupplyIssues,
   getUtilityCapacity,
   getUtilityDemand,
   type GameSpeed,
@@ -41,6 +42,7 @@ const currency = new Intl.NumberFormat("de-CH", {
 export function TopBar({ state, connected, onSetSpeed, onOpenSavegames }: TopBarProps) {
   const electricityDemand = getElectricityDemand(state);
   const electricityCapacity = getElectricityCapacity(state);
+  const supplyIssues = getSupplyIssues(state);
 
   return (
     <header className="topbar">
@@ -76,31 +78,25 @@ export function TopBar({ state, connected, onSetSpeed, onOpenSavegames }: TopBar
           icon={Zap}
           label="Strom"
           value={`${electricityCapacity} / ${electricityDemand} MW`}
-          warning={electricityDemand > electricityCapacity}
+          warning={supplyIssues.includes("electricity")}
         />
         <StatusItem
           icon={Droplets}
           label="Wasser"
           value={`${getUtilityCapacity(state, "water")} / ${getUtilityDemand(state, "water")} m3`}
-          warning={
-            getUtilityDemand(state, "water") > getUtilityCapacity(state, "water")
-          }
+          warning={supplyIssues.includes("water")}
         />
         <StatusItem
           icon={Waves}
           label="Abwasser"
           value={`${getUtilityCapacity(state, "sewage")} / ${getUtilityDemand(state, "sewage")} m3`}
-          warning={
-            getUtilityDemand(state, "sewage") > getUtilityCapacity(state, "sewage")
-          }
+          warning={supplyIssues.includes("sewage")}
         />
         <StatusItem
           icon={Recycle}
           label="Muell"
           value={`${getUtilityCapacity(state, "waste")} / ${getUtilityDemand(state, "waste")} t`}
-          warning={
-            getUtilityDemand(state, "waste") > getUtilityCapacity(state, "waste")
-          }
+          warning={supplyIssues.includes("waste")}
         />
         <StatusItem icon={Smile} label="Zufriedenheit" value={`${state.happiness} %`} />
         <StatusItem

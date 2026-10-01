@@ -2,10 +2,11 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { PerspectiveCamera, Vector3 } from "three";
 
 const MAP_SIZE = 128;
-const SECTOR_SIZE = 16;
 const CAMERA_START = new Vector3(130, 105, 150);
 
-test("selects and purchases an adjacent sector", async ({ page }, testInfo) => {
+test("makes the complete map available from the beginning", async ({
+  page,
+}, testInfo) => {
   await page.goto("/");
 
   await expect(page.getByText("Auenfeld")).toBeVisible();
@@ -17,26 +18,18 @@ test("selects and purchases an adjacent sector", async ({ page }, testInfo) => {
     .poll(() => countRenderedColors(page), { message: "3D canvas should not be blank" })
     .toBeGreaterThan(12);
 
-  await selectSector(page, 1, 3);
-
-  const inspector = page.getByLabel("Sektor B4");
-  await expect(inspector).toBeVisible();
-  await expect(inspector.getByText("Kaufbar", { exact: true })).toBeVisible();
-  await inspector.getByRole("button", { name: "Sektor kaufen" }).click();
-
-  const dialog = page.getByRole("dialog", { name: "Sektor B4 kaufen?" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Kaufen" }).click();
-
-  await expect(inspector.getByText("Teil der Stadt")).toBeVisible();
-  await expect(page.getByText(/67.?000/).first()).toBeVisible();
-  await expect(page.getByText("Sektor B4 wurde erschlossen.")).toBeVisible();
+  await selectMenuTool(page, "Stadtplanung", "Strassen");
+  await clickTile(page, 80, 40);
+  await expect(canvas).toHaveAttribute("data-road-count", "1");
+  await expect(page.getByRole("button", { name: "Sektoren" })).toHaveCount(0);
+  await expect(page.getByText("Kaufbar", { exact: true })).toHaveCount(0);
 
   const noHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth <= window.innerWidth,
   );
   expect(noHorizontalOverflow).toBe(true);
 
+  await selectMenuTool(page, "Beduerfnisse", "Uebersicht");
   const cameraBefore = await canvas.getAttribute("data-camera-position");
   await rotateCamera(page);
   await expect
@@ -45,6 +38,34 @@ test("selects and purchases an adjacent sector", async ({ page }, testInfo) => {
   await expect.poll(() => countRenderedColors(page)).toBeGreaterThan(12);
 
   await captureScreenshot(page, testInfo);
+});
+
+test("keeps a roughly dragged road on one straight axis", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  const canvas = page.locator("canvas.city-map-canvas");
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+  await selectMenuTool(page, "Stadtplanung", "Strassen");
+
+  const treesBefore = Number(await canvas.getAttribute("data-visible-tree-count"));
+  const start = await tileScreenPosition(page, 30, 48);
+  const roughTarget = await tileScreenPosition(page, 70, 52);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(roughTarget.x, roughTarget.y, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(canvas).toHaveAttribute("data-road-count", "41");
+  await expect(canvas).toHaveAttribute("data-road-row-count", "1");
+  await expect(canvas).toHaveAttribute("data-road-column-count", "41");
+  await expect
+    .poll(async () => Number(await canvas.getAttribute("data-visible-tree-count")))
+    .toBeLessThan(treesBefore);
+  await page.screenshot({
+    path: testInfo.outputPath("straight-road-clears-trees.png"),
+    fullPage: true,
+  });
 });
 
 test("builds zones and complete utility services in the 3D world", async ({
@@ -58,10 +79,14 @@ test("builds zones and complete utility services in the 3D world", async ({
 
   await selectMenuTool(page, "Stadtplanung", "Strassen");
   await expect(page.getByLabel("Strassenbau")).toBeVisible();
-  for (let column = 8; column <= 44; column += 1) {
+  for (let row = 88; row <= 100; row += 1) {
+    await clickTile(page, 8, row);
+  }
+  for (let column = 9; column <= 44; column += 1) {
     await clickTile(page, column, 100);
   }
-  await expect.poll(() => canvas.getAttribute("data-road-count")).toBe("37");
+  await expect.poll(() => canvas.getAttribute("data-road-count")).toBe("49");
+  await expect(canvas).toHaveAttribute("data-outside-connected", "true");
 
   await selectMenuTool(page, "Gebiete", "Wohngebiet");
   await expect(page.getByRole("complementary", { name: "Wohnzone" })).toBeVisible();
@@ -79,6 +104,8 @@ test("builds zones and complete utility services in the 3D world", async ({
   ).toBeVisible();
   await clickTile(page, 24, 102);
   await expect.poll(() => canvas.getAttribute("data-industrial-count")).toBe("9");
+  await expect(canvas).toHaveAttribute("data-outside-connected-zones", "27");
+  await expect(canvas).toHaveAttribute("data-outside-vehicle-count", "2");
   await expect(page.getByText("Gebaeude")).toBeVisible();
 
   await selectMenuTool(page, "Beduerfnisse", "Strom");
@@ -88,6 +115,7 @@ test("builds zones and complete utility services in the 3D world", async ({
   await clickTile(page, 12, 101);
   await expect.poll(() => canvas.getAttribute("data-wind-turbine-count")).toBe("1");
   await expect(page.getByText("Windkraftanlage gebaut.")).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-electricity-coverage", "81");
 
   await page.getByRole("button", { name: /Kraftwerk/ }).click();
   await clickTile(page, 27, 101);
@@ -146,6 +174,39 @@ test("builds zones and complete utility services in the 3D world", async ({
   });
 });
 
+test("protects the regional road and detects a broken city connection", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const canvas = page.locator("canvas.city-map-canvas");
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+  await expect(canvas).toHaveAttribute("data-regional-road-count", "8");
+  await expect(canvas).toHaveAttribute("data-outside-connected", "false");
+  await expect(
+    page.getByRole("status", { name: "Aussenverbindung: Anschluss fehlt" }),
+  ).toBeVisible();
+
+  await selectMenuTool(page, "Werkzeuge", "Bulldozer");
+  await clickTile(page, 3, 88);
+  await expect(
+    page.getByText(
+      "Die regionale Hauptstrasse ist Teil der Aussenverbindung und kann nicht entfernt werden.",
+    ),
+  ).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-regional-road-count", "8");
+
+  await selectMenuTool(page, "Stadtplanung", "Strassen");
+  await clickTile(page, 8, 88);
+  await expect(canvas).toHaveAttribute("data-outside-connected", "true");
+  await expect(canvas).toHaveAttribute("data-outside-vehicle-count", "1");
+
+  await selectMenuTool(page, "Werkzeuge", "Bulldozer");
+  await clickTile(page, 8, 88);
+  await expect(canvas).toHaveAttribute("data-outside-connected", "false");
+  await expect(canvas).toHaveAttribute("data-outside-vehicle-count", "0");
+});
+
 test("organizes city tools and restores a manual savegame", async ({
   page,
 }, testInfo) => {
@@ -155,7 +216,12 @@ test("organizes city tools and restores a manual savegame", async ({
   await expect(canvas).toHaveAttribute("data-ready", "true");
 
   await page.getByRole("tab", { name: "Oeffentliche Einrichtungen" }).click();
-  await expect(page.getByRole("button", { name: "Polizei - geplant" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Polizei", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Feuerwehr", exact: true }),
+  ).toBeEnabled();
   await expect(page.getByRole("button", { name: "Rathaus - geplant" })).toBeDisabled();
 
   await selectMenuTool(page, "Beduerfnisse", "Uebersicht");
@@ -194,6 +260,54 @@ test("organizes city tools and restores a manual savegame", async ({
   await expect(page.getByText("Teststadt", { exact: true })).toHaveCount(0);
 });
 
+test("builds road-based public services and shows land values", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+
+  const canvas = page.locator("canvas.city-map-canvas");
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+
+  await selectMenuTool(page, "Stadtplanung", "Strassen");
+  for (let column = 8; column <= 44; column += 1) {
+    await clickTile(page, column, 88);
+  }
+  await selectMenuTool(page, "Gebiete", "Wohngebiet");
+  await clickTile(page, 30, 86);
+  await expect.poll(() => canvas.getAttribute("data-residential-count")).toBe("9");
+
+  await selectMenuTool(page, "Oeffentliche Einrichtungen", "Feuerwehr");
+  await expect(page.getByRole("complementary", { name: "Feuerwehr" })).toBeVisible();
+  await clickTile(page, 10, 90);
+  await expect.poll(() => canvas.getAttribute("data-fire-station-count")).toBe("1");
+  await expect(canvas).toHaveAttribute("data-fire-coverage", "100");
+
+  await selectMenuTool(page, "Oeffentliche Einrichtungen", "Polizei");
+  await clickTile(page, 14, 90);
+  await expect.poll(() => canvas.getAttribute("data-police-station-count")).toBe("1");
+
+  await selectMenuTool(page, "Oeffentliche Einrichtungen", "Gesundheit");
+  await clickTile(page, 18, 90);
+  await expect.poll(() => canvas.getAttribute("data-clinic-count")).toBe("1");
+
+  await selectMenuTool(page, "Oeffentliche Einrichtungen", "Bildung");
+  await clickTile(page, 22, 90);
+  await expect.poll(() => canvas.getAttribute("data-school-count")).toBe("1");
+  await expect(canvas).toHaveAttribute("data-education-coverage", "100");
+
+  await selectMenuTool(page, "Gebiete", "Grundstueckswerte");
+  await expect(
+    page.getByRole("complementary", { name: "Grundstueckswerte" }),
+  ).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-land-value-overlay", "true");
+  await expect.poll(() => countRenderedColors(page)).toBeGreaterThan(12);
+  await page.screenshot({
+    path: testInfo.outputPath("citybuilder-public-services.png"),
+    fullPage: true,
+  });
+});
+
 test("supports trackpad pan and pinch zoom", async ({ page }) => {
   test.setTimeout(15_000);
   await page.goto("/");
@@ -221,31 +335,61 @@ test("supports trackpad pan and pinch zoom", async ({ page }) => {
   expect(cameraDistance(afterPinch)).not.toBeCloseTo(cameraDistance(afterPan), 1);
 });
 
-async function selectSector(page: Page, column: number, row: number) {
+test("pauses traffic and builds avenues two tiles wide", async ({ page }, testInfo) => {
+  await page.goto("/");
+
   const canvas = page.locator("canvas.city-map-canvas");
-  await expect(canvas).toBeVisible();
-  const bounds = await canvas.boundingBox();
-  if (!bounds) throw new Error("Map canvas has no visible bounds");
+  await expect(canvas).toHaveAttribute("data-ready", "true");
 
-  const camera = new PerspectiveCamera(45, bounds.width / bounds.height, 0.5, 600);
-  camera.position.copy(CAMERA_START);
-  camera.lookAt(0, 0, 0);
-  camera.updateProjectionMatrix();
-  camera.updateMatrixWorld();
+  await selectMenuTool(page, "Stadtplanung", "Strassen");
+  await clickTile(page, 8, 88);
+  await expect(canvas).toHaveAttribute("data-outside-vehicle-count", "1");
+  const movingProgress = await canvas.getAttribute("data-traffic-progress");
+  await expect
+    .poll(() => canvas.getAttribute("data-traffic-progress"))
+    .not.toBe(movingProgress);
 
-  const worldPosition = new Vector3(
-    -MAP_SIZE / 2 + (column + 0.5) * SECTOR_SIZE,
-    0.56,
-    -MAP_SIZE / 2 + (row + 0.5) * SECTOR_SIZE,
-  ).project(camera);
+  await page.getByRole("button", { name: "Pause" }).click();
+  await expect(canvas).toHaveAttribute("data-simulation-speed", "0");
+  await page.waitForTimeout(100);
+  const pausedProgress = await canvas.getAttribute("data-traffic-progress");
+  await page.waitForTimeout(400);
+  await expect(canvas).toHaveAttribute("data-traffic-progress", pausedProgress!);
 
-  await canvas.click({
-    position: {
-      x: ((worldPosition.x + 1) / 2) * bounds.width,
-      y: ((-worldPosition.y + 1) / 2) * bounds.height,
-    },
+  await selectMenuTool(page, "Stadtplanung", "Alleen");
+  await expect(page.getByLabel("Alleebau")).toBeVisible();
+  await clickTile(page, 10, 90);
+  await expect(canvas).toHaveAttribute("data-avenue-count", "2");
+  await expect(canvas).toHaveAttribute("data-road-count", "3");
+  await page.screenshot({
+    path: testInfo.outputPath("citybuilder-avenue.png"),
+    fullPage: true,
   });
-}
+});
+
+test("offers loans with selectable amount and term", async ({ page }, testInfo) => {
+  await page.goto("/");
+
+  const canvas = page.locator("canvas.city-map-canvas");
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+  await selectMenuTool(page, "Werkzeuge", "Finanzen");
+
+  const inspector = page.getByRole("complementary", { name: "Finanzen" });
+  await expect(inspector).toBeVisible();
+  await inspector.getByRole("button", { name: /100.?000/ }).click();
+  await inspector.getByRole("button", { name: "72 Monate" }).click();
+  await expect(inspector.getByText("7.1 %", { exact: true })).toBeVisible();
+  await inspector.getByRole("button", { name: "Kredit aufnehmen" }).click();
+
+  await expect(canvas).toHaveAttribute("data-active-loan-count", "1");
+  await expect(canvas).toHaveAttribute("data-total-debt", "100000");
+  await expect(page.getByText(/Kredit ueber CHF 100.?000 aufgenommen/)).toBeVisible();
+  await expect(inspector.getByText("72 Monate verbleibend")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("citybuilder-finances.png"),
+    fullPage: true,
+  });
+});
 
 async function selectMenuTool(page: Page, category: string, tool: string) {
   await page.getByRole("tab", { name: category }).click();
@@ -253,6 +397,20 @@ async function selectMenuTool(page: Page, category: string, tool: string) {
 }
 
 async function clickTile(page: Page, column: number, row: number) {
+  const canvas = page.locator("canvas.city-map-canvas");
+  const position = await tileScreenPosition(page, column, row);
+  const bounds = await canvas.boundingBox();
+  if (!bounds) throw new Error("Map canvas has no visible bounds");
+
+  await canvas.click({
+    position: {
+      x: position.x - bounds.x,
+      y: position.y - bounds.y,
+    },
+  });
+}
+
+async function tileScreenPosition(page: Page, column: number, row: number) {
   const canvas = page.locator("canvas.city-map-canvas");
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("Map canvas has no visible bounds");
@@ -269,12 +427,10 @@ async function clickTile(page: Page, column: number, row: number) {
     -MAP_SIZE / 2 + row + 0.5,
   ).project(camera);
 
-  await canvas.click({
-    position: {
-      x: ((position.x + 1) / 2) * bounds.width,
-      y: ((-position.y + 1) / 2) * bounds.height,
-    },
-  });
+  return {
+    x: bounds.x + ((position.x + 1) / 2) * bounds.width,
+    y: bounds.y + ((-position.y + 1) / 2) * bounds.height,
+  };
 }
 
 async function countRenderedColors(page: Page): Promise<number> {

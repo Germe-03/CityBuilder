@@ -1,19 +1,12 @@
 import { z } from "zod";
 
-import { TOTAL_SECTOR_COUNT, type GameState } from "../simulation/cityMap";
+import type { GameState } from "../simulation/cityMap";
 
 export const SAVEGAME_SCHEMA_VERSION = 1;
 
 const mapTileSchema = z.object({
   column: z.number().int().nonnegative(),
   row: z.number().int().nonnegative(),
-});
-
-const sectorSchema = z.object({
-  id: z.number().int().nonnegative(),
-  column: z.number().int().nonnegative(),
-  row: z.number().int().nonnegative(),
-  owned: z.boolean(),
 });
 
 const zoneTileSchema = mapTileSchema.extend({
@@ -31,7 +24,29 @@ const serviceBuildingSchema = mapTileSchema.extend({
     "landfill",
     "recycling-center",
     "incinerator",
+    "fire-station",
+    "police-station",
+    "clinic",
+    "hospital",
+    "elementary-school",
+    "high-school",
   ]),
+});
+
+const cityLoanSchema = z.object({
+  id: z.number().int().positive(),
+  originalPrincipal: z.number().positive(),
+  remainingBalance: z.number().nonnegative(),
+  annualRate: z.number().nonnegative(),
+  monthlyPayment: z.number().positive(),
+  originalTermMonths: z.union([
+    z.literal(12),
+    z.literal(24),
+    z.literal(48),
+    z.literal(72),
+  ]),
+  remainingMonths: z.number().int().nonnegative(),
+  startedDay: z.number().int().positive(),
 });
 
 export const gameStateSchema = z.object({
@@ -44,11 +59,11 @@ export const gameStateSchema = z.object({
   lastExpenses: z.number().finite(),
   day: z.number().int().positive(),
   speed: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
-  purchasedSectorCount: z.number().int().nonnegative(),
-  sectors: z.array(sectorSchema).length(TOTAL_SECTOR_COUNT),
   roadTiles: z.array(mapTileSchema),
+  avenueTiles: z.array(mapTileSchema).default([]),
   zoneTiles: z.array(zoneTileSchema),
   serviceBuildings: z.array(serviceBuildingSchema),
+  loans: z.array(cityLoanSchema).default([]),
 });
 
 export interface SaveGameEnvelope {

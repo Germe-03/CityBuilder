@@ -4,8 +4,10 @@ import type {
   DemolishFailureReason,
   GameSpeed,
   GameState,
+  LoanAmount,
+  LoanFailureReason,
+  LoanTerm,
   MapTile,
-  PurchaseFailureReason,
   ServiceBuilding,
   ServiceBuildingKind,
   ServicePlacementFailureReason,
@@ -13,7 +15,6 @@ import type {
 
 export type SimulationCommand =
   | { type: "initialize" }
-  | { type: "purchase-sector"; sectorId: number }
   | { type: "build-tiles"; kind: BuildKind; tiles: MapTile[] }
   | { type: "demolish-tiles"; tiles: MapTile[] }
   | {
@@ -22,18 +23,12 @@ export type SimulationCommand =
       anchor: MapTile;
     }
   | { type: "set-speed"; speed: GameSpeed }
+  | { type: "take-loan"; amount: LoanAmount; term: LoanTerm }
   | { type: "replace-state"; state: GameState }
   | { type: "reset" };
 
 export type SimulationEvent =
   | { type: "snapshot"; state: GameState }
-  | {
-      type: "purchase-result";
-      ok: boolean;
-      sectorId: number;
-      reason?: PurchaseFailureReason;
-      state: GameState;
-    }
   | {
       type: "build-result";
       ok: boolean;
@@ -57,5 +52,13 @@ export type SimulationEvent =
       kind: ServiceBuildingKind;
       building?: ServiceBuilding;
       reason?: ServicePlacementFailureReason;
+      state: GameState;
+    }
+  | {
+      type: "loan-result";
+      ok: boolean;
+      amount: LoanAmount;
+      term: LoanTerm;
+      reason?: LoanFailureReason;
       state: GameState;
     };

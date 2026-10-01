@@ -7,10 +7,18 @@ import {
   type ServiceBuildingKind,
 } from "../simulation/cityMap";
 
-export type BuildToolId = "roads" | "residential" | "commercial" | "industrial";
+export type BuildToolId =
+  "roads" | "avenues" | "residential" | "commercial" | "industrial";
 export type UtilityToolId = "electricity" | "water" | "sewage" | "waste";
+export type CivicToolId = "fire" | "police" | "health" | "education";
 export type ToolId =
-  "inspect" | "sectors" | "needs" | BuildToolId | UtilityToolId | "bulldozer";
+  | "needs"
+  | "land-value"
+  | "finances"
+  | BuildToolId
+  | UtilityToolId
+  | CivicToolId
+  | "bulldozer";
 
 interface Notice {
   id: number;
@@ -21,13 +29,11 @@ interface Notice {
 interface GameStore {
   snapshot: GameState;
   connected: boolean;
-  selectedSectorId: number | null;
   activeTool: ToolId;
   selectedServiceBuildingKind: ServiceBuildingKind;
   notice: Notice | null;
   setSnapshot: (snapshot: GameState) => void;
   setConnected: (connected: boolean) => void;
-  selectSector: (sectorId: number | null) => void;
   setActiveTool: (tool: ToolId) => void;
   selectServiceBuildingKind: (kind: ServiceBuildingKind) => void;
   showNotice: (message: string, tone?: Notice["tone"]) => void;
@@ -37,13 +43,11 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set) => ({
   snapshot: createInitialGameState(),
   connected: false,
-  selectedSectorId: null,
-  activeTool: "sectors",
+  activeTool: "needs",
   selectedServiceBuildingKind: "wind-turbine",
   notice: null,
   setSnapshot: (snapshot) => set({ snapshot }),
   setConnected: (connected) => set({ connected }),
-  selectSector: (selectedSectorId) => set({ selectedSectorId }),
   setActiveTool: (activeTool) =>
     set((state) => {
       const defaultKind = getDefaultServiceKind(activeTool);
@@ -69,5 +73,9 @@ function getDefaultServiceKind(tool: ToolId): ServiceBuildingKind | null {
   if (tool === "water") return "water-pump";
   if (tool === "sewage") return "sewage-plant";
   if (tool === "waste") return "landfill";
+  if (tool === "fire") return "fire-station";
+  if (tool === "police") return "police-station";
+  if (tool === "health") return "clinic";
+  if (tool === "education") return "elementary-school";
   return null;
 }
